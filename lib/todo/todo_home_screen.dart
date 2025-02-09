@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todolist_app_dicoding_submission/todo/todo_add_list.dart';
 import 'package:todolist_app_dicoding_submission/todo/todo_edit_list.dart';
 
@@ -15,7 +17,24 @@ class TodoItem {
   final Key key;
 
   TodoItem({required this.title, this.isDone = false}) : key = UniqueKey();
+
+  // Konversi ke Map untuk disimpan
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'isDone': isDone,
+    };
+  }
+
+  // Membuat objek dari Map
+  factory TodoItem.fromJson(Map<String, dynamic> json) {
+    return TodoItem(
+      title: json['title'],
+      isDone: json['isDone'],
+    );
+  }
 }
+
 
 // Stateless widget for the section header
 class TodoSectionHeader extends StatelessWidget {
@@ -155,6 +174,63 @@ class _TodoHomeScreenState extends State<TodoHomeScreen> {
   bool _isDoneExpanded = true;
 
   @override
+  void initState() {
+    super.initState();
+    _loadTodoList(); // Load data saat aplikasi dijalankan
+  }
+
+  // Fungsi untuk load data
+  Future<void> _loadTodoList() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? todosJson = prefs.getString('todo_list');
+
+    if (todosJson != null) {
+      final List<dynamic> decodedList = jsonDecode(todosJson);
+      setState(() {
+        _todoList.clear();
+        _todoList.addAll(decodedList.map((item) => TodoItem.fromJson(item)));
+      });
+    }
+  }
+
+  // Fungsi untuk simpan data
+  Future<void> _saveTodoList() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String todosJson =
+    jsonEncode(_todoList.map((todo) => todo.toJson()).toList());
+    await prefs.setString('todo_list', todosJson);
+  }
+
+  // Modifikasi fungsi ini untuk menyimpan setiap kali ada perubahan
+  void _addTodoItem(String title) {
+    setState(() {
+      _todoList.add(TodoItem(title: title));
+    });
+    _saveTodoList();
+  }
+
+  void _updateTodoItem(TodoItem item, String newTitle) {
+    setState(() {
+      item.title = newTitle;
+    });
+    _saveTodoList();
+  }
+
+  void _deleteTodoItem(TodoItem item) {
+    setState(() {
+      _todoList.remove(item);
+    });
+    _saveTodoList();
+  }
+
+  void _toggleTodoStatus(TodoItem item, bool isDone) {
+    setState(() {
+      item.isDone = isDone;
+    });
+    _saveTodoList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final doneTodos = _todoList.where((todo) => todo.isDone).toList();
     final notDoneTodos = _todoList.where((todo) => !todo.isDone).toList();
@@ -224,28 +300,21 @@ class _TodoHomeScreenState extends State<TodoHomeScreen> {
                               child: TodoListItem(
                                 todoItem: todoItem,
                                 onStatusChanged: (bool value) {
-                                  setState(() {
-                                    todoItem.isDone = value;
-                                  });
+                                  _toggleTodoStatus(todoItem, value); // Panggil fungsi ini
                                 },
                                 onOptionSelected: (value) async {
                                   if (value == 'Delete') {
-                                    setState(() {
-                                      _todoList.remove(todoItem);
-                                    });
+                                    _deleteTodoItem(todoItem); // Hapus dengan fungsi simpan
                                   } else if (value == 'Edit') {
                                     await Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) =>
-                                            EditTodoListScreen(
-                                              initialTitle: todoItem.title,
-                                              onSave: (newTitle) {
-                                                setState(() {
-                                                  todoItem.title = newTitle;
-                                                });
-                                              },
-                                            ),
+                                        builder: (context) => EditTodoListScreen(
+                                          initialTitle: todoItem.title,
+                                          onSave: (newTitle) {
+                                            _updateTodoItem(todoItem, newTitle); // Edit dengan simpan
+                                          },
+                                        ),
                                       ),
                                     );
                                   }
@@ -304,28 +373,21 @@ class _TodoHomeScreenState extends State<TodoHomeScreen> {
                               child: TodoListItem(
                                 todoItem: todoItem,
                                 onStatusChanged: (bool value) {
-                                  setState(() {
-                                    todoItem.isDone = value;
-                                  });
+                                  _toggleTodoStatus(todoItem, value); // Panggil fungsi ini
                                 },
                                 onOptionSelected: (value) async {
                                   if (value == 'Delete') {
-                                    setState(() {
-                                      _todoList.remove(todoItem);
-                                    });
+                                    _deleteTodoItem(todoItem); // Hapus dengan fungsi simpan
                                   } else if (value == 'Edit') {
-                                    await Navigator.push(
+                                    await Navigator.push(//comment
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) =>
-                                            EditTodoListScreen(
-                                              initialTitle: todoItem.title,
-                                              onSave: (newTitle) {
-                                                setState(() {
-                                                  todoItem.title = newTitle;
-                                                });
-                                              },
-                                            ),
+                                        builder: (context) => EditTodoListScreen(
+                                          initialTitle: todoItem.title,
+                                          onSave: (newTitle) {
+                                            _updateTodoItem(todoItem, newTitle); // Edit dengan simpan
+                                          },
+                                        ),
                                       ),
                                     );
                                   }
@@ -355,9 +417,7 @@ class _TodoHomeScreenState extends State<TodoHomeScreen> {
               ),
             );
             if (newTodo != null && newTodo is String) {
-              setState(() {
-                _todoList.add(TodoItem(title: newTodo));
-              });
+              _addTodoItem(newTodo); // Gunakan fungsi ini
             }
           },
           backgroundColor: Colors.blue,
